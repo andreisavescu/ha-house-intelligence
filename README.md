@@ -18,10 +18,10 @@ This first release is deliberately read-only. It discovers registered entities, 
 
 The integration creates two diagnostic sensors:
 
-- **Inventory** — totals for entities, enabled/disabled entities, devices, areas and currently unavailable entities. Attributes contain breakdowns by domain, integration and area.
-- **Data quality** — counts of entities with missing area assignments, unavailable enabled entities and disabled entities.
+- **Inventory** — totals for entities, enabled/disabled entities, devices and areas. Attributes contain breakdowns by domain, integration and area.
+- **Data quality** — counts of enabled entities that are unavailable and entities without an area assignment.
 
-The integration refreshes every five minutes and also updates when Home Assistant entity states change.
+The inventory refreshes every five minutes.
 
 ### Design principles
 

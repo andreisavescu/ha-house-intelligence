@@ -18,15 +18,22 @@ This first release is deliberately read-only. It discovers registered entities, 
 
 The integration creates two diagnostic sensors:
 
-- **Inventory** — totals for entities, enabled/disabled entities, devices and areas. Attributes contain breakdowns by domain, integration and area.
-- **Data quality** — counts of enabled entities that are unavailable and entities without an area assignment.
+- **Inventory** — totals for entities, enabled/disabled entities, devices and areas. Attributes break down the inventory by domain, integration, area, device class, state class, unit and device manufacturer. It also groups unavailable entities and missing area assignments by integration.
+- **Data quality** — counts of enabled entities that are unavailable or have no area assignment. It also reports entities without a device association. Example entity IDs are capped at 25 per category to keep state attributes bounded.
 
 The inventory refreshes every five minutes.
+
+### Architecture
+
+House Intelligence is an independent, read-only whole-home intelligence layer. Specialist integrations may contribute knowledge through their published Home Assistant entities and sensor attributes.
+
+Heating Intelligence is one such specialist source. House Intelligence may consume its thermal measurements and derived insights, but it does not import its code, change its configuration, or require it to be installed. If Heating Intelligence is absent, House Intelligence continues to operate without that source.
 
 ### Design principles
 
 - Read-only discovery first.
-- Keep Heating Intelligence independent.
+- Keep specialist integrations independent.
+- Consume published Home Assistant entities rather than coupling to another integration's implementation.
 - Prefer a small number of useful summary entities over hundreds of generated entities.
 - Build on Home Assistant registries and state data; do not require an external database or cloud service.
 

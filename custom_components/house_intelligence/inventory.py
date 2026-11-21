@@ -62,7 +62,11 @@ def build_state_analysis(
 
     for entry in entity_entries:
         entity_id = _value(entry, "entity_id")
-        if not entity_id or entity_id.split(".", 1)[0] != "sensor":
+        if (
+            not entity_id
+            or entity_id.split(".", 1)[0] != "sensor"
+            or _value(entry, "disabled_by") is not None
+        ):
             continue
 
         state = state_by_id.get(entity_id)
@@ -70,9 +74,10 @@ def build_state_analysis(
         state_class = attributes.get("state_class") or _value(entry, "state_class")
         device_class = attributes.get("device_class") or _value(entry, "device_class")
         unit = attributes.get("unit_of_measurement") or _value(entry, "unit_of_measurement")
-        if state_class not in ("measurement", "measurement_angle") and not (
-            device_class and unit
-        ):
+        if state_class is not None:
+            if state_class not in ("measurement", "measurement_angle"):
+                continue
+        elif not (device_class and unit):
             continue
 
         totals["total"] += 1

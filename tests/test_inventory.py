@@ -201,3 +201,15 @@ def test_measurement_freshness_is_broken_down_by_category():
     assert result["measurement_by_category"]["environmental"]["fresh_percent"] == 100.0
     assert result["measurement_by_category"]["energy_electrical"]["unavailable"] == 1
     assert result["measurement_by_category"]["energy_electrical"]["fresh_percent"] == 0.0
+
+
+def test_area_quality_ignores_external_weather_and_mobile_app_entities():
+    entities = [
+        ns(entity_id="sensor.room_temp", platform="mqtt", disabled_by=None, area_id=None, device_id=None, device_class="temperature", unit_of_measurement="°C"),
+        ns(entity_id="sensor.outdoor_forecast_temp", platform="wundergroundpws", disabled_by=None, area_id=None, device_id=None, device_class="temperature", unit_of_measurement="°C"),
+        ns(entity_id="sensor.phone_battery", platform="mobile_app", disabled_by=None, area_id=None, device_id=None, device_class="battery", unit_of_measurement="%"),
+    ]
+    result = build_inventory(entities, [], [], [])
+    assert result["entities_without_area"] == 3
+    assert result["area_assignment_applicable"] == 1
+    assert result["entities_missing_area_applicable"] == 1

@@ -115,3 +115,89 @@ def test_non_measurement_totals_are_not_marked_stale():
     result = build_state_analysis([entity], [], [], [state], now=datetime(2026, 11, 21, tzinfo=timezone.utc))
     assert result["measurement_entities"] == 0
     assert result["measurement_fresh_percent"] is None
+
+
+def test_classification_uses_device_class_and_source_origin():
+    physical = ns(
+        entity_id="sensor.living_temperature",
+        platform="mqtt",
+        device_id="sensor_device",
+    )
+    physical_state = ns(
+        entity_id="sensor.living_temperature",
+        state="21",
+        attributes={
+            "device_class": "temperature",
+            "state_class": "measurement",
+            "unit_of_measurement": "°C",
+        },
+    )
+    assert INVENTORY.classify_entity(physical, physical_state)["category"] == "environmental"
+    assert INVENTORY.classify_entity(physical, physical_state)["origin"] == "device"
+
+    derived = ns(
+        entity_id="sensor.living_power",
+        platform="powercalc",
+        device_id=None,
+    )
+    derived_state = ns(
+        entity_id="sensor.living_power",
+        state="42",
+        attributes={"device_class": "power", "unit_of_measurement": "W"},
+    )
+    assert INVENTORY.classify_entity(derived, derived_state)["category"] == "energy_electrical"
+    assert INVENTORY.classify_entity(derived, derived_state)["origin"] == "derived"
+
+
+def test_specialist_and_seasonal_integrations_are_classified_separately():
+    heating = ns(entity_id="sensor.room_heat_retention", platform="heating_intelligence")
+    irrigation = ns(entity_id="binary_sensor.opensprinkler_station_running", platform="opensprinkler")
+    assert INVENTORY.classify_entity(heating)["category"] == "heating_cooling"
+    assert INVENTORY.classify_entity(heating)["origin"] == "specialist_derived"
+    assert INVENTORY.classify_entity(irrigation)["category"] == "irrigation"
+
+
+def test_unavailable_breakdowns_include_domain_and_category():
+    entities = [
+        ns(entity_id="sensor.temp", platform="mqtt", disabled_by=None, area_id="room", device_id="dev"),
+        ns(entity_id="automation.alarm", platform="automation", disabled_by=None, area_id=None, device_id=None),
+    ]
+    states = [
+        ns(entity_id="sensor.temp", state="unavailable", attributes={"device_class": "temperature", "unit_of_measurement": "°C"}),
+        ns(entity_id="automation.alarm", state="unavailable", attributes={}),
+    ]
+    result = build_inventory(entities, [ns(id="dev", area_id="room")], [ns(id="room", name="Room")], states)
+    assert result["unavailable_by_domain"] == {"automation": 1, "sensor": 1}
+    assert result["unavailable_by_category"] == {"environmental": 1, "infrastructure": 1}
+    assert result["unavailable_by_integration"] == {"automation": 1, "mqtt": 1}
+
+
+def test_area_organization_excludes_automations_and_specialist_derived_entities():
+    entities = [
+        ns(entity_id="sensor.room_temp", platform="mqtt", disabled_by=None, area_id=None, device_id=None, device_class="temperature", unit_of_measurement="°C"),
+        ns(entity_id="automation.alarm", platform="automation", disabled_by=None, area_id=None, device_id=None),
+        ns(entity_id="sensor.house_heat_loss", platform="heating_intelligence", disabled_by=None, area_id=None, device_id=None),
+    ]
+    result = build_inventory(entities, [], [], [])
+    assert result["entities_without_area"] == 3
+    assert result["area_assignment_applicable"] == 1
+    assert result["entities_missing_area_applicable"] == 1
+    assert result["area_not_applicable_entities"] == 2
+    assert result["without_area_applicable_by_integration"] == {"mqtt": 1}
+
+
+def test_measurement_freshness_is_broken_down_by_category():
+    now = datetime(2026, 11, 21, 12, tzinfo=timezone.utc)
+    entities = [
+        ns(entity_id="sensor.room_temp", platform="mqtt", disabled_by=None, area_id=None, device_id=None, device_class="temperature", unit_of_measurement="°C"),
+        ns(entity_id="sensor.main_power", platform="powercalc", disabled_by=None, area_id=None, device_id=None, device_class="power", unit_of_measurement="W"),
+    ]
+    states = [
+        ns(entity_id="sensor.room_temp", state="21", attributes={"device_class": "temperature", "unit_of_measurement": "°C"}, last_reported=now),
+        ns(entity_id="sensor.main_power", state="unavailable", attributes={"device_class": "power", "unit_of_measurement": "W"}),
+    ]
+    result = build_state_analysis(entities, [], [], states, now=now)
+    assert result["measurement_by_category"]["environmental"]["fresh"] == 1
+    assert result["measurement_by_category"]["environmental"]["fresh_percent"] == 100.0
+    assert result["measurement_by_category"]["energy_electrical"]["unavailable"] == 1
+    assert result["measurement_by_category"]["energy_electrical"]["fresh_percent"] == 0.0

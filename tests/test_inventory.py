@@ -45,7 +45,7 @@ def test_inventory_counts_and_area_fallback():
 def test_missing_state_and_area_are_grouped():
     entities = [
         ns(entity_id="binary_sensor.door", platform="mqtt", disabled_by=None, area_id=None, device_id=None),
-        ns(entity_id="sensor.temp", platform="tuya", disabled_by=None, area_id=None, device_id=None),
+        ns(entity_id="sensor.temp", platform="tuya", disabled_by=None, area_id=None, device_id=None, device_class="temperature", unit_of_measurement="°C"),
     ]
     result = build_inventory(entities, [], [], [])
     assert result["unavailable_entities"] == 2

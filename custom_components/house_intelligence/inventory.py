@@ -58,6 +58,17 @@ PRESENCE_CLASSES = {
     "smoke", "sound", "vibration", "window",
 }
 DERIVED_AREA_EXEMPT_PLATFORMS = DERIVED_PLATFORMS | SPECIALIST_PLATFORMS
+NON_PHYSICAL_AREA_PLATFORMS = {
+    "co2signal", "f1_sensor", "fordpass", "hacs", "hassio", "met",
+    "mobile_app", "onedrive", "openweathermap", "pollen_tracker",
+    "waqi", "wundergroundpws", "zte_tracker", "vehicule",
+}
+PHYSICAL_DEVICE_PLATFORMS = {
+    "esphome", "gree", "hisense_ac_plugin", "matter", "mqtt", "nut",
+    "opensprinkler", "reolink", "shelly", "smartthings", "sonoff",
+    "tplink", "tuya", "wiz", "xiaomi_aqara", "xiaomi_ble",
+    "xiaomi_home", "xiaomi_miio", "xiaomi_miot", "zha", "zigbee2mqtt",
+}
 
 
 def _value(obj: Any, key: str, default: Any = None) -> Any:
@@ -174,9 +185,14 @@ def classify_entity(entry: Any, state: Any = None) -> dict[str, str]:
 
 def _area_assignment_expected(entry: Any, classification: dict[str, str]) -> bool:
     """Whether a physical room/device area is normally meaningful."""
+    platform = classification["platform"]
+    has_device = bool(_value(entry, "device_id"))
     return (
         classification["domain"] in PHYSICAL_AREA_DOMAINS
+        and classification["category"] != "other"
         and classification["origin"] not in {"derived", "specialist_derived"}
+        and platform not in NON_PHYSICAL_AREA_PLATFORMS
+        and (has_device or platform in PHYSICAL_DEVICE_PLATFORMS)
     )
 
 

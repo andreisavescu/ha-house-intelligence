@@ -219,7 +219,12 @@ def test_area_audit_groups_by_device_and_suggests_existing_area_names():
         ns(id="bedroom", name="Bedroom"),
     ]
 
-    result = INVENTORY.build_area_assignment_audit(entities, devices, areas)
+    states = [
+        ns(entity_id="sensor.living_room_temperature", state="21", attributes={"device_class": "temperature", "unit_of_measurement": "°C"}),
+        ns(entity_id="sensor.living_room_humidity", state="45", attributes={"device_class": "humidity", "unit_of_measurement": "%"}),
+        ns(entity_id="binary_sensor.front_door", state="off", attributes={"device_class": "door"}),
+    ]
+    result = INVENTORY.build_area_assignment_audit(entities, devices, areas, states)
 
     assert result["area_audit_groups"] == 2
     assert result["area_audit_suggested_groups"] == 1
@@ -240,7 +245,8 @@ def test_area_audit_uses_device_name_and_does_not_suggest_unknown_areas():
     ]
     areas = [ns(id="eli", name="Eli bedroom")]
 
-    result = INVENTORY.build_area_assignment_audit(entities, devices, areas)
+    states = [ns(entity_id="sensor.temperature", state="20", attributes={"device_class": "temperature", "unit_of_measurement": "°C"})]
+    result = INVENTORY.build_area_assignment_audit(entities, devices, areas, states)
 
     assert result["area_audit_suggested_groups"] == 1
     assert result["area_audit_sample"][0]["suggested_area"]["area_name"] == "Eli bedroom"

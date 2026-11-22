@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
+import re
+import unicodedata
 from typing import Any
 
 SAMPLE_LIMIT = 25
@@ -315,6 +317,125 @@ def build_state_analysis(
     }
 
 
+
+def _normalize_area_text(value: Any) -> str:
+    """Normalize names for conservative area-name matching."""
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return " ".join(re.findall(r"[a-z0-9]+", text.casefold()))
+
+
+def build_area_assignment_audit(
+    entity_entries: list[Any],
+    devices: list[Any],
+    areas: list[Any],
+    *,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Group missing-area physical entities by device and suggest exact area-name matches.
+
+    Suggestions are advisory only. A match is emitted only when an existing
+    area's normalized name appears as a complete phrase in device/entity
+    metadata. No entity or device registry entries are modified.
+    """
+    device_by_id = {_value(device, "id"): device for device in devices}
+    area_by_id = {_value(area, "id"): area for area in areas}
+    groups: dict[str, dict[str, Any]] = {}
+
+    for entry in entity_entries:
+        entity_id = _value(entry, "entity_id")
+        if not entity_id or _value(entry, "disabled_by") is not None:
+            continue
+        device_id = _value(entry, "device_id")
+        device = device_by_id.get(device_id)
+        classification = classify_entity(entry)
+        if not _area_assignment_expected(entry, classification):
+            continue
+        area_id = _value(entry, "area_id") or _value(device, "area_id")
+        if area_id and area_id in area_by_id:
+            continue
+
+        group_key = f"device:{device_id}" if device_id and device else f"entity:{entity_id}"
+        if group_key not in groups:
+            device_name = (
+                _value(device, "name_by_user")
+                or _value(device, "name")
+                or " ".join(filter(None, (
+                    _value(device, "manufacturer"), _value(device, "model")
+                )))
+            )
+            groups[group_key] = {
+                "group_id": group_key,
+                "device_name": str(device_name or ""),
+                "manufacturer": str(_value(device, "manufacturer") or ""),
+                "model": str(_value(device, "model") or ""),
+                "integration": classification["platform"],
+                "entity_ids": [],
+                "_match_text": [],
+            }
+        group = groups[group_key]
+        group["entity_ids"].append(entity_id)
+        for candidate in (
+            _value(entry, "name"),
+            _value(entry, "original_name"),
+            entity_id.split(".", 1)[-1].replace("_", " "),
+            _value(device, "name_by_user"),
+            _value(device, "name"),
+        ):
+            normalized = _normalize_area_text(candidate)
+            if normalized:
+                group["_match_text"].append(normalized)
+
+    area_names = [
+        (str(_value(area, "id")), str(_value(area, "name") or ""))
+        for area in areas
+        if _value(area, "id") and _value(area, "name")
+    ]
+    audited = []
+    for group in groups.values():
+        match_text = " | ".join(group.pop("_match_text"))
+        matches = []
+        for area_id, area_name in area_names:
+            normalized_area = _normalize_area_text(area_name)
+            if normalized_area and re.search(
+                rf"(?<![a-z0-9]){re.escape(normalized_area)}(?![a-z0-9])",
+                match_text,
+            ):
+                matches.append({"area_id": area_id, "area_name": area_name})
+        group["entity_ids"] = sorted(group["entity_ids"])
+        group["entity_count"] = len(group["entity_ids"])
+        group["suggested_area"] = matches[0] if len(matches) == 1 else None
+        group["suggestion_status"] = (
+            "suggested" if len(matches) == 1 else
+            "ambiguous" if len(matches) > 1 else "no_match"
+        )
+        group["candidate_areas"] = matches
+        audited.append(group)
+
+    audited.sort(key=lambda item: (
+        item["suggestion_status"] != "suggested",
+        item["device_name"].casefold(),
+        item["entity_ids"][0] if item["entity_ids"] else "",
+    ))
+    suggested = sum(item["suggestion_status"] == "suggested" for item in audited)
+    return {
+        "area_audit_groups": len(audited),
+        "area_audit_suggested_groups": suggested,
+        "area_audit_ambiguous_groups": sum(
+            item["suggestion_status"] == "ambiguous" for item in audited
+        ),
+        "area_audit_no_match_groups": sum(
+            item["suggestion_status"] == "no_match" for item in audited
+        ),
+        "area_audit_sample": audited[:limit],
+        "area_audit_sample_limit": limit,
+        "area_audit_interpretation": (
+            "Read-only proof of concept. Suggestions match existing area names "
+            "against device/entity names; verify before assigning."
+        ),
+    }
+
+
 def build_inventory(
     entity_entries: list[Any],
     devices: list[Any],
@@ -445,6 +566,7 @@ def build_inventory(
         "without_area_sample": missing_area[:SAMPLE_LIMIT],
         "diagnostic_sample_limit": SAMPLE_LIMIT,
     }
+    result.update(build_area_assignment_audit(valid_entries, devices, areas))
     result.update(
         build_state_analysis(
             valid_entries, devices, areas, states, now=now, stale_after=stale_after

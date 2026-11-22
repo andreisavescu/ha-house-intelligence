@@ -24,6 +24,10 @@ The integration creates five diagnostic sensors:
 - **Availability** — count of enabled entities currently unavailable, grouped by integration, domain and classification category. This is an observation, not a fault count: an entity may be intentionally or seasonally offline.
 - **Organization** — count of entities missing an area assignment where a physical room/device area is applicable. Automations, helpers, derived calculations and specialist-derived entities are not treated as room-organization failures. The broader legacy missing-area count remains available on Inventory and Data quality.
 
+### Area assignment audit proof of concept
+
+The new **Area assignment audit** diagnostic sensor groups missing-area physical entities by device. Entities without a device are listed individually. Suggestions are based only on exact normalized matches to existing area names in device names, entity names or entity IDs; Romanian diacritics and punctuation are normalized. Multiple matches are marked ambiguous, and unmatched groups receive no suggestion. Up to 100 groups are exposed, including entity IDs and device metadata. This is advisory only: the integration does not change entity/device area assignments or call registry update methods.
+
 ### Entity classification
 
 Classification uses Home Assistant entity domain, device class, state class, unit and integration platform. It is deterministic and does not use entity-name guessing.

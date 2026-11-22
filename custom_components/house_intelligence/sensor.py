@@ -26,6 +26,7 @@ async def async_setup_entry(
             HouseMeasurementFreshnessSensor(coordinator, entry),
             HouseAvailabilitySensor(coordinator, entry),
             HouseOrganizationSensor(coordinator, entry),
+            HouseAreaAuditSensor(coordinator, entry),
         ]
     )
 
@@ -219,4 +220,29 @@ class HouseOrganizationSensor(HouseBaseSensor):
             "missing_area_by_integration": data["without_area_applicable_by_integration"],
             "sample": data["without_area_applicable_sample"],
             "sample_limit": data["diagnostic_sample_limit"],
+        }
+
+
+
+class HouseAreaAuditSensor(HouseBaseSensor):
+    """Read-only suggestions for grouping missing-area entities by device."""
+
+    def __init__(self, coordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "area_audit", "Area assignment audit")
+        self._attr_icon = "mdi:map-marker-check-outline"
+
+    @property
+    def native_value(self):
+        return self.coordinator.data["area_audit_groups"]
+
+    @property
+    def extra_state_attributes(self):
+        data = self.coordinator.data
+        return {
+            "groups_with_suggestion": data["area_audit_suggested_groups"],
+            "ambiguous_groups": data["area_audit_ambiguous_groups"],
+            "groups_without_match": data["area_audit_no_match_groups"],
+            "groups": data["area_audit_sample"],
+            "sample_limit": data["area_audit_sample_limit"],
+            "interpretation": data["area_audit_interpretation"],
         }

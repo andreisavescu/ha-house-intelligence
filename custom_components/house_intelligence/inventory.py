@@ -329,6 +329,7 @@ def build_area_assignment_audit(
     entity_entries: list[Any],
     devices: list[Any],
     areas: list[Any],
+    states: list[Any] | None = None,
     *,
     limit: int = 100,
 ) -> dict[str, Any]:
@@ -340,6 +341,7 @@ def build_area_assignment_audit(
     """
     device_by_id = {_value(device, "id"): device for device in devices}
     area_by_id = {_value(area, "id"): area for area in areas}
+    state_by_id = {_value(state, "entity_id"): state for state in (states or [])}
     groups: dict[str, dict[str, Any]] = {}
 
     for entry in entity_entries:
@@ -348,7 +350,7 @@ def build_area_assignment_audit(
             continue
         device_id = _value(entry, "device_id")
         device = device_by_id.get(device_id)
-        classification = classify_entity(entry)
+        classification = classify_entity(entry, state_by_id.get(entity_id))
         if not _area_assignment_expected(entry, classification):
             continue
         area_id = _value(entry, "area_id") or _value(device, "area_id")
@@ -566,7 +568,7 @@ def build_inventory(
         "without_area_sample": missing_area[:SAMPLE_LIMIT],
         "diagnostic_sample_limit": SAMPLE_LIMIT,
     }
-    result.update(build_area_assignment_audit(valid_entries, devices, areas))
+    result.update(build_area_assignment_audit(valid_entries, devices, areas, states))
     result.update(
         build_state_analysis(
             valid_entries, devices, areas, states, now=now, stale_after=stale_after

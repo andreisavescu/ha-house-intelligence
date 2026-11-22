@@ -203,6 +203,49 @@ def test_measurement_freshness_is_broken_down_by_category():
     assert result["measurement_by_category"]["energy_electrical"]["fresh_percent"] == 0.0
 
 
+
+def test_area_audit_groups_by_device_and_suggests_existing_area_names():
+    entities = [
+        ns(entity_id="sensor.living_room_temperature", name="Living room temperature", platform="xiaomi_aqara", disabled_by=None, area_id=None, device_id="dev1"),
+        ns(entity_id="sensor.living_room_humidity", name="Living room humidity", platform="xiaomi_aqara", disabled_by=None, area_id=None, device_id="dev1"),
+        ns(entity_id="binary_sensor.front_door", name="Front door", platform="mqtt", disabled_by=None, area_id=None, device_id="dev2"),
+    ]
+    devices = [
+        ns(id="dev1", name="Aqara climate sensor", name_by_user=None, manufacturer="Aqara", model="TH"),
+        ns(id="dev2", name="Door contact", name_by_user=None, manufacturer="MQTT", model="Contact"),
+    ]
+    areas = [
+        ns(id="living", name="Living room"),
+        ns(id="bedroom", name="Bedroom"),
+    ]
+
+    result = INVENTORY.build_area_assignment_audit(entities, devices, areas)
+
+    assert result["area_audit_groups"] == 2
+    assert result["area_audit_suggested_groups"] == 1
+    assert result["area_audit_no_match_groups"] == 1
+    living = next(item for item in result["area_audit_sample"] if item["group_id"] == "device:dev1")
+    assert living["entity_count"] == 2
+    assert living["suggested_area"] == {"area_id": "living", "area_name": "Living room"}
+    door = next(item for item in result["area_audit_sample"] if item["group_id"] == "device:dev2")
+    assert door["suggestion_status"] == "no_match"
+
+
+def test_area_audit_uses_device_name_and_does_not_suggest_unknown_areas():
+    entities = [
+        ns(entity_id="sensor.temperature", name=None, platform="mqtt", disabled_by=None, area_id=None, device_id="dev1"),
+    ]
+    devices = [
+        ns(id="dev1", name="Eli bedroom temperature sensor", name_by_user=None, manufacturer="Aqara", model="TH"),
+    ]
+    areas = [ns(id="eli", name="Eli bedroom")]
+
+    result = INVENTORY.build_area_assignment_audit(entities, devices, areas)
+
+    assert result["area_audit_suggested_groups"] == 1
+    assert result["area_audit_sample"][0]["suggested_area"]["area_name"] == "Eli bedroom"
+
+
 def test_area_quality_ignores_external_weather_and_mobile_app_entities():
     entities = [
         ns(entity_id="sensor.room_temp", platform="mqtt", disabled_by=None, area_id=None, device_id=None, device_class="temperature", unit_of_measurement="°C"),
